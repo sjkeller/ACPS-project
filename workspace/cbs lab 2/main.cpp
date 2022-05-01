@@ -14,6 +14,7 @@
 #define SCL_PIN PB_8
 #define BME280 0x76
 
+#define DEL_LOGS PB_2
 
 #define FORMAT_SD_CARD true
 
@@ -51,6 +52,28 @@ unsigned short dig_T1, dig_P1;
 
 char address;
 
+static volatile bool del_state = false;
+
+void deleteLogs(void) {
+    del_state = true;
+}
+
+int deletePath(const char *fsrc)
+{
+    int res;
+    DIR *d = opendir(fsrc);
+    struct dirent *p;
+    char path[30] = {0};
+    while((p = readdir(d)) != NULL) {
+        strcpy(path, fsrc);
+        strcat(path, "/");
+        strcat(path, p->d_name);
+        res = remove(path);
+    }
+    closedir(d);
+    res = res + remove(fsrc);
+    return res;
+}
 
 int32_t calc_temp(int32_t raw_temp){
     int32_t temp;
@@ -201,6 +224,10 @@ int main()
     #endif
 
     #if EX_SELECT == 2
+
+
+        InterruptIn button(DEL_LOGS);
+
         int err = 0;
         printf("Welcome to the filesystem example.\n");
 
@@ -220,7 +247,31 @@ int main()
             check_error(err);
         }
 
+        set_time(1256729737);
 
+        FILE *fp = fopen("/sd/datalog.txt", "w+");
+
+        while(true) {
+            fprintf(fp, "Time (s), Pressure (hPa), Temperature (degC)\n");
+
+            time_t logtime = time(NULL);
+
+            fprintf(fp, "%d, %d.%d, %d.%d", logtime, real_pres / 100, real_pres % 100, real_temp / 100, real_temp % 100);
+
+            if(del_state) {
+                deletePath("/sd/")
+            }
+
+            
+            ThisThread::sleep_for(1s);
+        }
+
+        fclose(fp);
+        fflush(stdout);
+        err = fs.unmount();
+        check_error(err);
+
+        /*
         printf("Opening a new file, numbers.txt... ");
         FILE *fd = fopen("/sd/numbers.txt", "w+");
         printf("%s\n", (!fd ? "Fail :(" : "OK")); 
@@ -274,7 +325,7 @@ int main()
         err = fs.unmount();
         check_error(err);
         
-        printf("Mbed OS filesystem example done!\n");
+        printf("Mbed OS filesystem example done!\n");*/
     #endif
 
 }
