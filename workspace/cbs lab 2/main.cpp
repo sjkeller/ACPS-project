@@ -5,8 +5,8 @@
 #include "mbed.h"
 #include <cstdint>
 #include <cstdio>
-//#include "SDBlockDevice.h"
-//#include "FATFileSystem.h"
+#include "SDBlockDevice.h"
+#include "FATFileSystem.h"
 
 #define EX_SELECT 1
 
@@ -34,6 +34,13 @@
 }
 */
 I2C bus(SDA_PIN, SCL_PIN);
+SDBlockDevice sd(MBED_CONF_SD_SPI_MOSI,
+                 MBED_CONF_SD_SPI_MISO,
+                 MBED_CONF_SD_SPI_CLK,
+                 MBED_CONF_SD_SPI_CS);
+
+FATFileSystem fs("sd", &sd);
+
 
 auto write_buffer = new char[2];
 
@@ -148,8 +155,6 @@ int getCalib(char* data, int index, bool u = false){
 int main()
 {
 
-    #if EX_SELECT == 1
-
         // wake up from sleep mode
         writeBMP(0xF4, (7 << 5) + (7 << 2) + 3);
 
@@ -184,47 +189,33 @@ int main()
         printf("P7: %hi\n", dig_P7);
         printf("P8: %hi\n", dig_P8);
         printf("P9: %hi\n", dig_P9);
-        
 
+    #if EX_SELECT == 1
+        
         while(true) {
 
-            
-
-            // get raw ensor data
+            // get raw register data
             readBMP(0xF7, data_buffer, 6);
 
+            // construct raw data from registers
             pressure = ((int32_t) data_buffer[0] << 12) + ((int32_t) data_buffer[1] << 4) + ((int32_t) data_buffer[2] >> 4);
             temperature = ((int32_t) data_buffer[3] << 12) + ((int32_t) data_buffer[4] << 4) + ((int32_t) data_buffer[5] >> 4);
 
-
-            
-
-            for (int i = 0; i < 6; i ++) {
-                real_pres = calc_press(pressure);
-                printf("Luftdruck: %d,%d hPa\n", real_pres / 100, real_pres % 100);
-                real_temp = calc_temp(temperature);
-                printf("Temperatur: %d,%d °C\n", real_temp / 100, real_temp % 100);
-
-
-            }
-
             // convert raw data to physical values
+            real_pres = calc_press(pressure);
+            real_temp = calc_temp(temperature);
 
-            //0x88 - 0xA1
+            // print out converted data
+            printf("Luftdruck: %d,%d hPa\n", real_pres / 100, real_pres % 100);
+            printf("Temperatur: %d,%d °C\n", real_temp / 100, real_temp % 100);
 
-
-            
-
-
-        // print out converted data
-            ThisThread::sleep_for(500ms);
+            // 1Hz sampling
+            ThisThread::sleep_for(1s);
         }
-
 
     #endif
 
     #if EX_SELECT == 2
-
 
         InterruptIn button(DEL_LOGS);
 
@@ -250,18 +241,34 @@ int main()
         set_time(1256729737);
 
         FILE *fp = fopen("/sd/datalog.txt", "w+");
-
+        fprintf(fp, "Time (s), Pressure (hPa), Temperature (degC)\n");
+        
         while(true) {
-            fprintf(fp, "Time (s), Pressure (hPa), Temperature (degC)\n");
 
+            // get raw register data
+            readBMP(0xF7, data_buffer, 6);
+
+            // construct raw data from registers
+            pressure = ((int32_t) data_buffer[0] << 12) + ((int32_t) data_buffer[1] << 4) + ((int32_t) data_buffer[2] >> 4);
+            temperature = ((int32_t) data_buffer[3] << 12) + ((int32_t) data_buffer[4] << 4) + ((int32_t) data_buffer[5] >> 4);
+
+            // convert raw data to physical values
+            real_pres = calc_press(pressure);
+            real_temp = calc_temp(temperature);
+            
+            // get time
             time_t logtime = time(NULL);
 
+            // print data to file
             fprintf(fp, "%d, %d.%d, %d.%d", logtime, real_pres / 100, real_pres % 100, real_temp / 100, real_temp % 100);
 
+            // delete file if delete state entered via interrupt
             if(del_state) {
-                deletePath("/sd/")
+                if (remove("/sd/datalog.txt") == 0)
+                    printf("logfile succesfully deleted\n");
+                else
+                    printf("could not delete logfile\n");
             }
-
             
             ThisThread::sleep_for(1s);
         }
@@ -271,61 +278,14 @@ int main()
         err = fs.unmount();
         check_error(err);
 
-        /*
-        printf("Opening a new file, numbers.txt... ");
-        FILE *fd = fopen("/sd/numbers.txt", "w+");
-        printf("%s\n", (!fd ? "Fail :(" : "OK")); 
+        #if EX_SELECT == 3
 
-        for (int i = 0; i < 20; i++) {
-            printf("Writing decimal numbers to a file (%d/20)\r", i);
-            fprintf(fd, "%d\n", i);
-        }
-        printf("Writing decimal numbers to a file (20/20) done.\n");
+            while (true) {
+                ;
+            }
 
-        printf("Closing file...");
-        fclose(fd);
-        printf(" done.\n");
+        #endif
 
-
-        printf("Re-opening file read-only... ");
-        fd = fopen("/sd/numbers.txt", "r");    
-        printf("%s\n", (!fd ? "Fail :(" : "OK")); 
-
-        printf("Dumping file to screen.\n");
-        char buff[16] = {0};
-        while (!feof(fd)) {
-            int size = fread(&buff[0], 1, 15, fd);
-            fwrite(&buff[0], 1, size, stdout);
-        }
-        printf("EOF.\n");
-
-        printf("Closing file...");
-        fclose(fd);
-        printf(" done.\n");
-
-
-        printf("Opening root directory... ");
-        DIR *dir = opendir("/sd/");
-        printf("%s\n", (!dir ? "Fail :(" : "OK"));
-
-        struct dirent *de;
-        printf("Printing all filenames:\n");
-        while ((de = readdir(dir)) != NULL) {
-            printf("  %s\n", &(de->d_name)[0]);
-        }
-
-        printf("Closing root directory... ");
-        err = closedir(dir);
-        check_error(err);
-
-
-        // Tidy up
-        printf("Unmounting... ");
-        fflush(stdout);
-        err = fs.unmount();
-        check_error(err);
-        
-        printf("Mbed OS filesystem example done!\n");*/
     #endif
 
 }
