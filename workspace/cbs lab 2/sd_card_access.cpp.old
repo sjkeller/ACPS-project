@@ -1,0 +1,55 @@
+        /*
+        printf("Opening a new file, numbers.txt... ");
+        FILE *fd = fopen("/sd/numbers.txt", "w+");
+        printf("%s\n", (!fd ? "Fail :(" : "OK")); 
+
+        for (int i = 0; i < 20; i++) {
+            printf("Writing decimal numbers to a file (%d/20)\r", i);
+            fprintf(fd, "%d\n", i);
+        }
+        printf("Writing decimal numbers to a file (20/20) done.\n");
+
+        printf("Closing file...");
+        fclose(fd);
+        printf(" done.\n");
+
+
+        printf("Re-opening file read-only... ");
+        fd = fopen("/sd/numbers.txt", "r");    
+        printf("%s\n", (!fd ? "Fail :(" : "OK")); 
+
+        printf("Dumping file to screen.\n");
+        char buff[16] = {0};
+        while (!feof(fd)) {
+            int size = fread(&buff[0], 1, 15, fd);
+            fwrite(&buff[0], 1, size, stdout);
+        }
+        printf("EOF.\n");
+
+        printf("Closing file...");
+        fclose(fd);
+        printf(" done.\n");
+
+
+        printf("Opening root directory... ");
+        DIR *dir = opendir("/sd/");
+        printf("%s\n", (!dir ? "Fail :(" : "OK"));
+
+        struct dirent *de;
+        printf("Printing all filenames:\n");
+        while ((de = readdir(dir)) != NULL) {
+            printf("  %s\n", &(de->d_name)[0]);
+        }
+
+        printf("Closing root directory... ");
+        err = closedir(dir);
+        check_error(err);
+
+
+        // Tidy up
+        printf("Unmounting... ");
+        fflush(stdout);
+        err = fs.unmount();
+        check_error(err);
+        
+        printf("Mbed OS filesystem example done!\n");*/
