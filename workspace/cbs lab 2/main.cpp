@@ -8,7 +8,7 @@
 #include "SDBlockDevice.h"
 #include "FATFileSystem.h"
 
-#define EX_SELECT 1
+#define EX_SELECT 2
 
 #define SDA_PIN PB_9
 #define SCL_PIN PB_8
@@ -16,7 +16,7 @@
 
 #define DEL_LOGS PB_2
 
-#define FORMAT_SD_CARD true
+#define FORMAT_SD_CARD 0
 
 /*SDBlockDevice sd(MBED_CONF_SD_SPI_MOSI,
                  MBED_CONF_SD_SPI_MISO,
@@ -234,17 +234,19 @@ int main()
         if (FORMAT_SD_CARD) {
             printf("Formatting the SD Card... ");
             fflush(stdout);
-            err = fs.format(&sd);
-            check_error(err);
+            fs.format(&sd);
+            //check_error(err);
         }
 
         set_time(1256729737);
 
-        FILE *fp = fopen("/sd/datalog.txt", "w+");
+        FILE *fp = fopen("/sd/datalog.txt", "w");
+        printf("starting log write\n");
         fprintf(fp, "Time (s), Pressure (hPa), Temperature (degC)\n");
+        fclose(fp);
         
         while(true) {
-
+            FILE *fp = fopen("/sd/datalog.txt", "w+");
             // get raw register data
             readBMP(0xF7, data_buffer, 6);
 
@@ -260,8 +262,8 @@ int main()
             time_t logtime = time(NULL);
 
             // print data to file
-            fprintf(fp, "%d, %d.%d, %d.%d", logtime, real_pres / 100, real_pres % 100, real_temp / 100, real_temp % 100);
-
+            fprintf(fp, "%d, %d.%d, %d.%d\n", logtime, real_pres / 100, real_pres % 100, real_temp / 100, real_temp % 100);
+            fclose(fp);
             // delete file if delete state entered via interrupt
             if(del_state) {
                 if (remove("/sd/datalog.txt") == 0)
@@ -273,10 +275,11 @@ int main()
             ThisThread::sleep_for(1s);
         }
 
-        fclose(fp);
-        fflush(stdout);
-        err = fs.unmount();
-        check_error(err);
+        
+        
+        fs.unmount();
+        printf("logfile save\n");
+        //check_error(err);
 
         #if EX_SELECT == 3
 
