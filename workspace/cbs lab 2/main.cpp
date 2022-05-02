@@ -59,10 +59,10 @@ unsigned short dig_T1, dig_P1;
 
 char address;
 
-static volatile bool del_state = false;
+static volatile bool del_state = true;
 
 void deleteLogs(void) {
-    del_state = true;
+    del_state = false;
 }
 
 int deletePath(const char *fsrc)
@@ -218,6 +218,7 @@ int main()
     #if EX_SELECT == 2
 
         InterruptIn button(DEL_LOGS);
+        button.fall(&deleteLogs);
 
         int err = 0;
         printf("Welcome to the filesystem example.\n");
@@ -240,13 +241,11 @@ int main()
 
         set_time(1256729737);
 
-        FILE *fp = fopen("/sd/datalog.txt", "w");
+        FILE *fp = fopen("/sd/datalog.txt", "w+");
         printf("starting log write\n");
         fprintf(fp, "Time (s), Pressure (hPa), Temperature (degC)\n");
-        fclose(fp);
         
-        while(true) {
-            FILE *fp = fopen("/sd/datalog.txt", "w+");
+        while(del_state) {
             // get raw register data
             readBMP(0xF7, data_buffer, 6);
 
@@ -263,20 +262,18 @@ int main()
 
             // print data to file
             fprintf(fp, "%d, %d.%d, %d.%d\n", logtime, real_pres / 100, real_pres % 100, real_temp / 100, real_temp % 100);
-            fclose(fp);
             // delete file if delete state entered via interrupt
-            if(del_state) {
+            /*if(del_state) {
                 if (remove("/sd/datalog.txt") == 0)
                     printf("logfile succesfully deleted\n");
                 else
                     printf("could not delete logfile\n");
-            }
+            }*/
             
             ThisThread::sleep_for(1s);
         }
 
-        
-        
+        fclose(fp);
         fs.unmount();
         printf("logfile save\n");
         //check_error(err);
