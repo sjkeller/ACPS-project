@@ -18,13 +18,6 @@
 
 #define FORMAT_SD_CARD 0
 
-/*SDBlockDevice sd(MBED_CONF_SD_SPI_MOSI,
-                 MBED_CONF_SD_SPI_MISO,
-                 MBED_CONF_SD_SPI_CLK,
-                 MBED_CONF_SD_SPI_CS);
-*/
-//FATFileSystem fs("sd", &sd);
-
 
 /*void check_error(int err){
     printf("%s\n", (err < 0 ? "Fail :(" : "OK"));
@@ -46,12 +39,14 @@ auto write_buffer = new char[2];
 
 auto data_buffer = new char[8];
 auto calib_data = new char[26];
+auto path_buffer = new char[50];
 
 int32_t temperature;
 int32_t pressure;
 
 int real_temp;
 int real_pres;
+int logfile_index;
 
 float temp_fine;
 short dig_T2, dig_T3, dig_P2, dig_P3, dig_P4, dig_P5, dig_P6, dig_P7, dig_P8, dig_P9;
@@ -59,11 +54,12 @@ unsigned short dig_T1, dig_P1;
 
 char address;
 
-static volatile bool del_state = true;
+static volatile bool del_state = false;
 
 void deleteLogs(void) {
-    del_state = false;
+    del_state = true;
 }
+
 
 int deletePath(const char *fsrc)
 {
@@ -221,7 +217,7 @@ int main()
         button.fall(&deleteLogs);
 
         int err = 0;
-        printf("Welcome to the filesystem example.\n");
+        fprintf(stdout, "Welcome to the filesystem example.\n"); // write to serial
 
         // Try to mount the filesystem
         printf("Mounting the filesystem... \n");
@@ -239,13 +235,18 @@ int main()
             //check_error(err);
         }
 
-        set_time(1256729737);
-
-        FILE *fp = fopen("/sd/datalog.txt", "w+");
+        time_t logtime = time(NULL);
+        sprintf(path_buffer, "/sd/datalog_%d.txt", (int) logtime);
+        printf(path_buffer);
+        printf("\n");
+        FILE *fp = fopen(path_buffer, "w+");
         printf("starting log write\n");
-        fprintf(fp, "Time (s), Pressure (hPa), Temperature (degC)\n");
         
-        while(del_state) {
+        fprintf(fp, "Time (s), Pressure (hPa), Temperature (degC)\n");
+        fclose(fp);
+        
+        while(true) {
+            fp = fopen(path_buffer, "a");
             // get raw register data
             readBMP(0xF7, data_buffer, 6);
 
@@ -262,18 +263,22 @@ int main()
 
             // print data to file
             fprintf(fp, "%d, %d.%d, %d.%d\n", logtime, real_pres / 100, real_pres % 100, real_temp / 100, real_temp % 100);
+            fclose(fp);
             // delete file if delete state entered via interrupt
-            /*if(del_state) {
-                if (remove("/sd/datalog.txt") == 0)
-                    printf("logfile succesfully deleted\n");
-                else
-                    printf("could not delete logfile\n");
-            }*/
+            if(del_state) {
+                
+                printf("starting format ... ");
+                fflush(stdout);
+                fs.format(&sd);
+                printf("formatting done\n");
+                del_state = false;
+                set_time(0);
+                break;
+            }
             
             ThisThread::sleep_for(1s);
         }
 
-        fclose(fp);
         fs.unmount();
         printf("logfile save\n");
         //check_error(err);
