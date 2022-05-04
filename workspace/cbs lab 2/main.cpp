@@ -54,8 +54,8 @@ short dig_T2, dig_T3, dig_P2, dig_P3, dig_P4, dig_P5, dig_P6, dig_P7, dig_P8, di
 unsigned short dig_T1, dig_P1;
 
 char address;
-char cmd_buffer_c;
-char * cmd_string = {};
+auto cmd_buffer_c = new char[1];
+auto cmd_buffer = new char[50];
 static volatile bool del_state = false;
 
 void deleteLogs(void) {
@@ -188,6 +188,8 @@ int main()
     printf("P8: %hi\n", dig_P8);
     printf("P9: %hi\n", dig_P9);
 
+
+
     #if EX_SELECT == 1
         
         while(true) {
@@ -288,25 +290,30 @@ int main()
 
     #if EX_SELECT == 3
 
-        int cmd_size;
-
-        //monitor.set_baud(9600);
-        //monitor.read();
-        printf("sneed");
-
+        monitor.set_baud(9600);
+        fflush(stdout);
         while (true) {
-            if(monitor.readable()) {
-                while(cmd_buffer_c != '\n' || sizeof(cmd_string) < 50) {
-                    monitor.read(&cmd_buffer_c, 1);
-                    cmd_string += cmd_buffer_c;
-                }   
-                printf("%s\n", cmd_string);
+            for (int j = 0; j < 50; j ++) {
+                cmd_buffer[j] = 0;
             }
-            cmd_string = {};
+            int i = 0;
+            while(i < 50) {
+                monitor.read(cmd_buffer_c, sizeof(cmd_buffer_c));
+                cmd_buffer[i] = *cmd_buffer_c;
+                if (cmd_buffer[i] == 'x') {
+                    cmd_buffer[i] = '\0';
+                    break;
+                }
+                i ++;
+            }
+            
+            ThisThread::sleep_for(200ms);
+            printf("%s\n", cmd_buffer);
+            cmd_buffer[0] = '\0';
+
 
         }
 
     #endif
 
 }
-
