@@ -5,6 +5,7 @@
 #include "mbed.h"
 #include <cstdint>
 #include <cstdio>
+#include "BufferedSerial.h"
 #include "SDBlockDevice.h"
 #include "FATFileSystem.h"
 
@@ -33,7 +34,7 @@ SDBlockDevice sd(MBED_CONF_SD_SPI_MOSI,
                  MBED_CONF_SD_SPI_CS);
 
 FATFileSystem fs("sd", &sd);
-
+BufferedSerial monitor(USBTX, USBRX);
 
 auto write_buffer = new char[2];
 
@@ -53,6 +54,8 @@ short dig_T2, dig_T3, dig_P2, dig_P3, dig_P4, dig_P5, dig_P6, dig_P7, dig_P8, di
 unsigned short dig_T1, dig_P1;
 
 char address;
+char cmd_buffer_c;
+char cmd_buffer[50];
 
 static volatile bool del_state = false;
 
@@ -281,12 +284,21 @@ int main()
 
         fs.unmount();
         printf("logfile save\n");
-        //check_error(err);
 
         #if EX_SELECT == 3
 
+            monitor.set_baud(9600);
+            monitor.read()
+
             while (true) {
-                ;
+                while(!monitor.readable())
+                    ;
+                while(monitor.read() != "\n") {
+                    cmd_buffer_c = monitor.read();
+                    cmd_buffer += cmd_buffer_c;
+                }
+                monitor.write(cmd_buffer);
+                montor.write("\n");
             }
 
         #endif
