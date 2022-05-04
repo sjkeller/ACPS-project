@@ -9,7 +9,7 @@
 #include "SDBlockDevice.h"
 #include "FATFileSystem.h"
 
-#define EX_SELECT 2
+#define EX_SELECT 3
 
 #define SDA_PIN PB_9
 #define SCL_PIN PB_8
@@ -34,7 +34,7 @@ SDBlockDevice sd(MBED_CONF_SD_SPI_MOSI,
                  MBED_CONF_SD_SPI_CS);
 
 FATFileSystem fs("sd", &sd);
-BufferedSerial monitor(USBTX, USBRX);
+static BufferedSerial monitor(USBTX, USBRX);
 
 auto write_buffer = new char[2];
 
@@ -55,8 +55,7 @@ unsigned short dig_T1, dig_P1;
 
 char address;
 char cmd_buffer_c;
-char cmd_buffer[50];
-
+char * cmd_string = {};
 static volatile bool del_state = false;
 
 void deleteLogs(void) {
@@ -154,40 +153,40 @@ int getCalib(char* data, int index, bool u = false){
 int main()
 {
 
-        // wake up from sleep mode
-        writeBMP(0xF4, (7 << 5) + (7 << 2) + 3);
+    // wake up from sleep mode
+    writeBMP(0xF4, (7 << 5) + (7 << 2) + 3);
 
-        ThisThread::sleep_for(200ms);
+    ThisThread::sleep_for(200ms);
 
-        // get calibration data
-        readBMP(0x88, calib_data, 24);
+    // get calibration data
+    readBMP(0x88, calib_data, 24);
 
-        // get calibration contants
-        dig_T1 = getCalib(calib_data, 0, true);
-        dig_T2 = getCalib(calib_data, 2);
-        dig_T3 = getCalib(calib_data, 4);
-        dig_P1 = getCalib(calib_data, 6, true);
-        dig_P2 = getCalib(calib_data, 8);
-        dig_P3 = getCalib(calib_data, 10);
-        dig_P4 = getCalib(calib_data, 12);
-        dig_P5 = getCalib(calib_data, 14);
-        dig_P6 = getCalib(calib_data, 16);
-        dig_P7 = getCalib(calib_data, 18);
-        dig_P8 = getCalib(calib_data, 20);
-        dig_P9 = getCalib(calib_data, 22);
+    // get calibration contants
+    dig_T1 = getCalib(calib_data, 0, true);
+    dig_T2 = getCalib(calib_data, 2);
+    dig_T3 = getCalib(calib_data, 4);
+    dig_P1 = getCalib(calib_data, 6, true);
+    dig_P2 = getCalib(calib_data, 8);
+    dig_P3 = getCalib(calib_data, 10);
+    dig_P4 = getCalib(calib_data, 12);
+    dig_P5 = getCalib(calib_data, 14);
+    dig_P6 = getCalib(calib_data, 16);
+    dig_P7 = getCalib(calib_data, 18);
+    dig_P8 = getCalib(calib_data, 20);
+    dig_P9 = getCalib(calib_data, 22);
 
-        printf("T1: %hu\n", dig_T1);
-        printf("T2: %hi\n", dig_T2);
-        printf("T3: %hi\n", dig_T3);
-        printf("P1: %hu\n", dig_P1);
-        printf("P2: %hi\n", dig_P2);
-        printf("P3: %hi\n", dig_P3);
-        printf("P4: %hi\n", dig_P4);
-        printf("P5: %hi\n", dig_P5);
-        printf("P6: %hi\n", dig_P6);
-        printf("P7: %hi\n", dig_P7);
-        printf("P8: %hi\n", dig_P8);
-        printf("P9: %hi\n", dig_P9);
+    printf("T1: %hu\n", dig_T1);
+    printf("T2: %hi\n", dig_T2);
+    printf("T3: %hi\n", dig_T3);
+    printf("P1: %hu\n", dig_P1);
+    printf("P2: %hi\n", dig_P2);
+    printf("P3: %hi\n", dig_P3);
+    printf("P4: %hi\n", dig_P4);
+    printf("P5: %hi\n", dig_P5);
+    printf("P6: %hi\n", dig_P6);
+    printf("P7: %hi\n", dig_P7);
+    printf("P8: %hi\n", dig_P8);
+    printf("P9: %hi\n", dig_P9);
 
     #if EX_SELECT == 1
         
@@ -285,23 +284,27 @@ int main()
         fs.unmount();
         printf("logfile save\n");
 
-        #if EX_SELECT == 3
+    #endif
 
-            monitor.set_baud(9600);
-            monitor.read()
+    #if EX_SELECT == 3
 
-            while (true) {
-                while(!monitor.readable())
-                    ;
-                while(monitor.read() != "\n") {
-                    cmd_buffer_c = monitor.read();
-                    cmd_buffer += cmd_buffer_c;
-                }
-                monitor.write(cmd_buffer);
-                montor.write("\n");
+        int cmd_size;
+
+        //monitor.set_baud(9600);
+        //monitor.read();
+        printf("sneed");
+
+        while (true) {
+            if(monitor.readable()) {
+                while(cmd_buffer_c != '\n' || sizeof(cmd_string) < 50) {
+                    monitor.read(&cmd_buffer_c, 1);
+                    cmd_string += cmd_buffer_c;
+                }   
+                printf("%s\n", cmd_string);
             }
+            cmd_string = {};
 
-        #endif
+        }
 
     #endif
 
