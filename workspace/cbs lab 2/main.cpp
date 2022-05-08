@@ -49,6 +49,8 @@ int real_temp;
 int real_pres;
 int logfile_index;
 
+int year, month, day, hour, minute, second;
+
 float temp_fine;
 short dig_T2, dig_T3, dig_P2, dig_P3, dig_P4, dig_P5, dig_P6, dig_P7, dig_P8, dig_P9;
 unsigned short dig_T1, dig_P1;
@@ -306,9 +308,13 @@ int main()
                 }
                 i ++;
             }
+
+            sscanf(cmd_buffer, "%d-%d-%d_%d-%d-%d", &year, &month, &day, &hour, &minute, &second);
             
             ThisThread::sleep_for(200ms);
             printf("%s\n", cmd_buffer);
+            printf("%d-%d-%d_%d-%d-%d", year, month, day, hour, minute, second);
+
             cmd_buffer[0] = '\0';
 
 
