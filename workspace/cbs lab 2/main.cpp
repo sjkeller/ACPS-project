@@ -159,6 +159,8 @@ int readDate(int *year, int *month, int *day, int *hour, int *minute, int *secon
         cmd_buffer[j] = 0;
     }
     int i = 0;
+
+    // read serial input char by char until termination character x
     while(i < 50) {
         length = monitor.read(cmd_buffer_c, sizeof(cmd_buffer_c));
         printf("%d", length);
@@ -170,7 +172,9 @@ int readDate(int *year, int *month, int *day, int *hour, int *minute, int *secon
         i ++;
     }
 
+    // pick up date values from date string
     sscanf(cmd_buffer, "%d-%d-%d_%d-%d-%d", year, month, day, hour, minute, second);
+    
     return length;
 }
 
@@ -228,8 +232,8 @@ int main()
     readDate(&year, &month, &day, &hour, &minute, &second);
     printf("%d-%d-%d_%d-%d-%d", year, month, day, hour, minute, second);
     struct tm t;
-    t.tm_year = year - 1900;
-    t.tm_mon = month - 1;
+    t.tm_year = year - 1900; // convert year
+    t.tm_mon = month - 1; // and month
     t.tm_mday = day;
     t.tm_hour = hour;
     t.tm_min = minute;
@@ -237,6 +241,7 @@ int main()
     time_t current_time = mktime(&t);
     set_time(current_time);
 
+    // disable serial read blocking for uninterrupted readout
     monitor.set_blocking(0);
 
     printf("\n begin");
@@ -345,6 +350,7 @@ int main()
             total_user_buffer[0] = '\0';
         }
 
+        // delay of one second
         ThisThread::sleep_for(1s);
     }
 
