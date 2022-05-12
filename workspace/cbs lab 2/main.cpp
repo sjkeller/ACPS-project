@@ -328,13 +328,12 @@ int main()
         const char * erase_cmd = "erase all";
         const char * newfile_cmd = "new log";
 
-        int total_i = 0;
-        int char_i = 0;
-        int length = 1;
+        int total_length = 0;
+        int length = 0;
 
         auto user_buffer_c = new char[1];
-        auto total_user_buffer = new char[50];
-        auto user_buffer = new char[50];
+        auto total_user_buffer = new char[10];
+        auto user_buffer = new char[10];
 
         int user_status;
 
@@ -360,7 +359,7 @@ int main()
         t.tm_sec = second;
         current_time = mktime(&t);
 
-        //monitor.set_blocking(0);
+        monitor.set_blocking(0);
 
         printf("\n begin");
         set_time(current_time);
@@ -388,15 +387,22 @@ int main()
         
         while(true) {
 
+            if(!new_file_state) {
+                fp = fopen(path_buffer, "a");
+            }
+
             if(new_file_state) {
-                fclose(fp);
+                
                 live_time = time(NULL);
                 strftime(path_buffer, 50, "/sd/%F_%H-%M-%S.log", localtime(&live_time));
                 FILE *fp = fopen(path_buffer, "w+");
+                fprintf(fp, "Time (s), Pressure (hPa), Temperature (degC)\n");
+                new_file_state = 0;
+                printf("\n new Logfile created");
             }
 
-            if(!new_file_state)
-                fp = fopen(path_buffer, "a");
+            
+                
             // get raw register data
             readBMP(0xF7, data_buffer, 6);
             
@@ -414,54 +420,53 @@ int main()
 
             // print data to file
             fprintf(fp, "%s, %d.%d, %d.%d\n", logtime_buffer, real_pres / 100, real_pres % 100, real_temp / 100, real_temp % 100);
-            //printf("%s, %d.%d, %d.%d\n", logtime_buffer, real_pres / 100, real_pres % 100, real_temp / 100, real_temp % 100);
+            printf("\n%s, %d.%d, %d.%d\n", logtime_buffer, real_pres / 100, real_pres % 100, real_temp / 100, real_temp % 100);
             fclose(fp);
             // delete file if delete state entered via interrupt
 
             if(del_state) {
+
                 printf("starting format ... ");
                 fflush(stdout);
                 fs.format(&sd);
                 printf("formatting done\n");
-                del_state = false;
+                del_state = 0;
                 break;
             }
             
-            //for (int j = 0; j < 50; j ++) {
-            //    user_buffer[j] = 0;
-            //}
-            int char_i = 0;
-            while(length > 0) {
-                length = monitor.read(user_buffer_c, sizeof(user_buffer_c));
-                printf("\n%s", user_buffer_c);
-                user_buffer[char_i] = *user_buffer_c;
-                
-                char_i ++;
-            }
-            total_i += char_i;
-            printf("\n%d", length);
+            //while(!monitor.readable())
+            //    ;
+            user_buffer[0] = '\0';
+            length = monitor.read(user_buffer, sizeof(user_buffer));
+            if(length > 0)
+                total_length += length;
+            strncat(total_user_buffer, user_buffer, length);
 
-            
-            total_user_buffer += *user_buffer;
+            printf("\n%d : %s - %s",total_length, total_user_buffer, user_buffer);
 
-            printf("\n%d : %s", total_i, total_user_buffer);
-
-            if (total_user_buffer[total_i] == 'x') {
-                total_user_buffer[total_i] = '\0';
-                total_i = 0;
+            if(total_length > 9) {
+                total_length = 0;
+                total_user_buffer[0] = '\0';
             }
 
-            if(strcmp(total_user_buffer, erase_cmd) == 0)
+            if(strcmp(total_user_buffer, erase_cmd) == 0) {
                 del_state = 1;
-            else if(strcmp(total_user_buffer, newfile_cmd) == 0)
+                total_length = 0;
+                total_user_buffer[0] = '\0';
+            }
+                
+            if(strcmp(total_user_buffer, newfile_cmd) == 0) {
                 new_file_state = 1;
+                total_length = 0;
+                total_user_buffer[0] = '\0';
+            }
+                
 
             
             ThisThread::sleep_for(1s);
         }
 
         fs.unmount();
-        printf("logfile save\n");
 
     #endif
 
