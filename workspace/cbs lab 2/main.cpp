@@ -40,7 +40,7 @@ auto write_buffer = new char[2];
 
 auto data_buffer = new char[8];
 auto calib_data = new char[26];
-auto path_buffer = new char[50];
+
 
 int32_t temperature;
 int32_t pressure;
@@ -56,8 +56,7 @@ short dig_T2, dig_T3, dig_P2, dig_P3, dig_P4, dig_P5, dig_P6, dig_P7, dig_P8, di
 unsigned short dig_T1, dig_P1;
 
 char address;
-auto cmd_buffer_c = new char[1];
-auto cmd_buffer = new char[50];
+
 static volatile bool del_state = false;
 
 void deleteLogs(void) {
@@ -148,6 +147,30 @@ int getCalib(char* data, int index, bool u = false){
     return ((short) data[index] + ((short) data[index + 1] << 8));
 }
 
+int readDate(int *year, int *month, int *day, int *hour, int *minute, int *second) {
+    auto cmd_buffer_c = new char[1];
+    auto cmd_buffer = new char[50];
+    int length;
+    for (int j = 0; j < 50; j ++) {
+        cmd_buffer[j] = 0;
+    }
+    int i = 0;
+    while(i < 50) {
+        length = monitor.read(cmd_buffer_c, sizeof(cmd_buffer_c));
+        printf("%d", length);
+        cmd_buffer[i] = *cmd_buffer_c;
+        if (cmd_buffer[i] == 'x') {
+            cmd_buffer[i] = '\0';
+            break;
+        }
+        i ++;
+    }
+
+    sscanf(cmd_buffer, "%d-%d-%d_%d-%d-%d", year, month, day, hour, minute, second);
+    return length;
+}
+
+
 
 //dig_T1 = (unsigned short) ((short) calib_data[0] + ((short) calib_data[1] << 8));
 //dig_T1 = (short) ((short) calib_data[0] + ((short) calib_data[1] << 8));
@@ -190,7 +213,7 @@ int main()
     printf("P8: %hi\n", dig_P8);
     printf("P9: %hi\n", dig_P9);
 
-
+    /* ****************************** exercise 1 ****************************** */
 
     #if EX_SELECT == 1
         
@@ -216,6 +239,8 @@ int main()
         }
 
     #endif
+
+    /* ****************************** exercise 2 ****************************** */
 
     #if EX_SELECT == 2
 
@@ -286,40 +311,160 @@ int main()
         }
 
         fs.unmount();
+
+    #endif
+    
+    /* ****************************** exercise 3 ****************************** */
+
+    #if EX_SELECT == 3
+        struct tm t;
+        time_t current_time;
+        time_t live_time;
+        char path_buffer[50] = {0};
+        char logtime_buffer[50] = {0};
+
+        bool new_file_state = 0;
+           
+        const char * erase_cmd = "erase all";
+        const char * newfile_cmd = "new log";
+
+        int total_i = 0;
+        int char_i = 0;
+        int length = 1;
+
+        auto user_buffer_c = new char[1];
+        auto total_user_buffer = new char[50];
+        auto user_buffer = new char[50];
+
+        int user_status;
+
+        InterruptIn button(DEL_LOGS);
+        button.fall(&deleteLogs);
+        
+        /*for (int i = 0; i < 50; i ++) {
+            path_buffer[i] = 0;
+        }
+        path_buffer[0] = '\0';*/
+        fs.mount(&sd);
+        monitor.set_baud(9600);
+        fflush(stdout);
+        set_time(0);
+        
+        readDate(&year, &month, &day, &hour, &minute, &second);
+        printf("%d-%d-%d_%d-%d-%d", year, month, day, hour, minute, second);
+        t.tm_year = year - 1900;
+        t.tm_mon = month - 1;
+        t.tm_mday = day;
+        t.tm_hour = hour;
+        t.tm_min = minute;
+        t.tm_sec = second;
+        current_time = mktime(&t);
+
+        //monitor.set_blocking(0);
+
+        printf("\n begin");
+        set_time(current_time);
+        ThisThread::sleep_for(1s);
+
+        if (FORMAT_SD_CARD) {
+            printf("Formatting the SD Card... ");
+            fflush(stdout);
+            fs.format(&sd);
+            //check_error(err);
+        }
+
+        live_time = time(NULL);
+        printf("\n live time: %u", live_time);
+        strftime(path_buffer, 50, "/sd/%F_%H-%M-%S.log", localtime(&live_time));
+        printf("\n%s", path_buffer);
+
+        //sprintf(path_buffer, "/sd/%d-%d-%d_%d-%d-%d.txt", year, month, day, hour, minute, second);
+        
+        FILE *fp = fopen(path_buffer, "w+");
+        printf("starting log write\n");
+        fprintf(fp, "Time (s), Pressure (hPa), Temperature (degC)\n");
+        fclose(fp);
+        
+        
+        while(true) {
+
+            if(new_file_state) {
+                fclose(fp);
+                live_time = time(NULL);
+                strftime(path_buffer, 50, "/sd/%F_%H-%M-%S.log", localtime(&live_time));
+                FILE *fp = fopen(path_buffer, "w+");
+            }
+
+            if(!new_file_state)
+                fp = fopen(path_buffer, "a");
+            // get raw register data
+            readBMP(0xF7, data_buffer, 6);
+            
+            // construct raw data from registers
+            pressure = ((int32_t) data_buffer[0] << 12) + ((int32_t) data_buffer[1] << 4) + ((int32_t) data_buffer[2] >> 4);
+            temperature = ((int32_t) data_buffer[3] << 12) + ((int32_t) data_buffer[4] << 4) + ((int32_t) data_buffer[5] >> 4);
+
+            // convert raw data to physical values
+            real_pres = calc_press(pressure);
+            real_temp = calc_temp(temperature);
+            
+            // get time
+            time_t live_time = time(NULL);
+            strftime(logtime_buffer, 50, "%H:%M:%S", localtime(&live_time));
+
+            // print data to file
+            fprintf(fp, "%s, %d.%d, %d.%d\n", logtime_buffer, real_pres / 100, real_pres % 100, real_temp / 100, real_temp % 100);
+            //printf("%s, %d.%d, %d.%d\n", logtime_buffer, real_pres / 100, real_pres % 100, real_temp / 100, real_temp % 100);
+            fclose(fp);
+            // delete file if delete state entered via interrupt
+
+            if(del_state) {
+                printf("starting format ... ");
+                fflush(stdout);
+                fs.format(&sd);
+                printf("formatting done\n");
+                del_state = false;
+                break;
+            }
+            
+            //for (int j = 0; j < 50; j ++) {
+            //    user_buffer[j] = 0;
+            //}
+            int char_i = 0;
+            while(length > 0) {
+                length = monitor.read(user_buffer_c, sizeof(user_buffer_c));
+                printf("\n%s", user_buffer_c);
+                user_buffer[char_i] = *user_buffer_c;
+                
+                char_i ++;
+            }
+            total_i += char_i;
+            printf("\n%d", length);
+
+            
+            total_user_buffer += *user_buffer;
+
+            printf("\n%d : %s", total_i, total_user_buffer);
+
+            if (total_user_buffer[total_i] == 'x') {
+                total_user_buffer[total_i] = '\0';
+                total_i = 0;
+            }
+
+            if(strcmp(total_user_buffer, erase_cmd) == 0)
+                del_state = 1;
+            else if(strcmp(total_user_buffer, newfile_cmd) == 0)
+                new_file_state = 1;
+
+            
+            ThisThread::sleep_for(1s);
+        }
+
+        fs.unmount();
         printf("logfile save\n");
 
     #endif
 
-    #if EX_SELECT == 3
-
-        monitor.set_baud(9600);
-        fflush(stdout);
-        while (true) {
-            for (int j = 0; j < 50; j ++) {
-                cmd_buffer[j] = 0;
-            }
-            int i = 0;
-            while(i < 50) {
-                monitor.read(cmd_buffer_c, sizeof(cmd_buffer_c));
-                cmd_buffer[i] = *cmd_buffer_c;
-                if (cmd_buffer[i] == 'x') {
-                    cmd_buffer[i] = '\0';
-                    break;
-                }
-                i ++;
-            }
-
-            sscanf(cmd_buffer, "%d-%d-%d_%d-%d-%d", &year, &month, &day, &hour, &minute, &second);
-            
-            ThisThread::sleep_for(200ms);
-            printf("%s\n", cmd_buffer);
-            printf("%d-%d-%d_%d-%d-%d", year, month, day, hour, minute, second);
-
-            cmd_buffer[0] = '\0';
-
-
-        }
-
-    #endif
-
 }
+
+
