@@ -1,6 +1,5 @@
-/*
- * An example of how to setup a filesystem and write a file on 
- * an SD card that is connected via SPI to the microcontroller.
+/*!
+ *  Exercise 3
  */
 #include "mbed.h"
 #include <cstdint>
@@ -8,8 +7,6 @@
 #include "BufferedSerial.h"
 #include "SDBlockDevice.h"
 #include "FATFileSystem.h"
-
-#define EX_SELECT 3
 
 #define SDA_PIN PB_9
 #define SCL_PIN PB_8
@@ -20,13 +17,6 @@
 #define FORMAT_SD_CARD 0
 
 
-/*void check_error(int err){
-    printf("%s\n", (err < 0 ? "Fail :(" : "OK"));
-    if (err < 0) {
-        error("error: %s (%d)\n", strerror(err), -err);
-    }
-}
-*/
 I2C bus(SDA_PIN, SCL_PIN);
 SDBlockDevice sd(MBED_CONF_SD_SPI_MOSI,
                  MBED_CONF_SD_SPI_MISO,
@@ -36,18 +26,14 @@ SDBlockDevice sd(MBED_CONF_SD_SPI_MOSI,
 FATFileSystem fs("sd", &sd);
 static BufferedSerial monitor(USBTX, USBRX);
 
-auto write_buffer = new char[2];
-
 auto data_buffer = new char[8];
 auto calib_data = new char[26];
-
 
 int32_t temperature;
 int32_t pressure;
 
 int real_temp;
 int real_pres;
-int logfile_index;
 
 int year, month, day, hour, minute, second;
 
@@ -55,32 +41,19 @@ float temp_fine;
 short dig_T2, dig_T3, dig_P2, dig_P3, dig_P4, dig_P5, dig_P6, dig_P7, dig_P8, dig_P9;
 unsigned short dig_T1, dig_P1;
 
-char address;
-
 static volatile bool del_state = false;
 
+/*!
+ *  Interrupt routine for deleting the log files
+ */
 void deleteLogs(void) {
     del_state = true;
 }
 
-
-int deletePath(const char *fsrc)
-{
-    int res;
-    DIR *d = opendir(fsrc);
-    struct dirent *p;
-    char path[30] = {0};
-    while((p = readdir(d)) != NULL) {
-        strcpy(path, fsrc);
-        strcat(path, "/");
-        strcat(path, p->d_name);
-        res = remove(path);
-    }
-    closedir(d);
-    res = res + remove(fsrc);
-    return res;
-}
-
+/*!
+ *  Calculates the temperature in °C from the given raw temperature
+ *  \param raw_temp The temperature measurement from the raw data
+ */
 int32_t calc_temp(int32_t raw_temp){
     int32_t temp;
     int32_t temp_fine;
@@ -91,8 +64,12 @@ int32_t calc_temp(int32_t raw_temp){
     return temp;
 }
 
-  uint32_t calc_press(int32_t raw_press)
-  {
+/*!
+ *  Calculates the pressure in °C from the given raw pressure
+ *  \param raw_press The pressure measurement from the raw data
+ */
+uint32_t calc_press(int32_t raw_press)
+{
     uint32_t p;
     // 32-bit only calculations
     int32_t var1, var2;
@@ -126,7 +103,11 @@ int32_t calc_temp(int32_t raw_temp){
     return p;
 }
 
-
+/*!
+ *  Writes to the BMP280 via I2C
+ *  \param address  The address to write to
+ *  \param value    The value to be written
+ */
 int writeBMP(char address, char value) {
     auto write_array = new char[2];
     write_array[0] = address;
@@ -134,6 +115,13 @@ int writeBMP(char address, char value) {
     return bus.write(BME280 << 1, write_array, 2);
 }
 
+/*!
+ *  Reads from the BMP280 via I2C
+ *  \param address  The address to read from
+ *  \param data     The buffer to which the values will be read
+ *  \param n        Number of bytes to read
+ *  \return         Returns 0 on success
+ */
 int readBMP(char address, char* data, int n = 1) {
     int succ_write, succ_read;
     succ_write = bus.write(BME280 << 1, &address, 1);
@@ -141,12 +129,28 @@ int readBMP(char address, char* data, int n = 1) {
     return succ_write + succ_read;
 }
 
+/*!
+ *  Gets BMP280 calibration data from the given data
+ *  \param data  The data, which contains the calibration data
+ *  \param data  The index of the wanted calibration data
+ *  \param n     If the calibration data is in unsigned format
+ *  \return      The wanted calibration data
+ */
 int getCalib(char* data, int index, bool u = false){
     if (u)
         return (unsigned short) ((short) data[index] + ((short) data[index + 1] << 8));
     return ((short) data[index] + ((short) data[index + 1] << 8));
 }
 
+/*!
+ *  Reads the data from the serial interface. String is ended via the "x" symbol
+ *  \param year  The variable in which the year data should be stored
+ *  \param month  The variable in which the month data should be stored
+ *  \param day  The variable in which the day data should be stored
+ *  \param hour  The variable in which the hour data should be stored
+ *  \param minute  The variable in which the minute data should be stored
+ *  \param second  The variable in which the second data should be stored
+ */
 int readDate(int *year, int *month, int *day, int *hour, int *minute, int *second) {
     auto cmd_buffer_c = new char[1];
     auto cmd_buffer = new char[50];
@@ -171,16 +175,12 @@ int readDate(int *year, int *month, int *day, int *hour, int *minute, int *secon
 }
 
 
-
-//dig_T1 = (unsigned short) ((short) calib_data[0] + ((short) calib_data[1] << 8));
-//dig_T1 = (short) ((short) calib_data[0] + ((short) calib_data[1] << 8));
-
 int main()
 {
-
     // wake up from sleep mode
     writeBMP(0xF4, (7 << 5) + (7 << 2) + 3);
 
+    //Wait for wake up
     ThisThread::sleep_for(200ms);
 
     // get calibration data
@@ -200,6 +200,7 @@ int main()
     dig_P8 = getCalib(calib_data, 20);
     dig_P9 = getCalib(calib_data, 22);
 
+    //print calibration data
     printf("T1: %hu\n", dig_T1);
     printf("T2: %hi\n", dig_T2);
     printf("T3: %hi\n", dig_T3);
@@ -213,263 +214,140 @@ int main()
     printf("P8: %hi\n", dig_P8);
     printf("P9: %hi\n", dig_P9);
 
-    /* ****************************** exercise 1 ****************************** */
+    //Set interrupt for button
+    InterruptIn button(DEL_LOGS);
+    button.fall(&deleteLogs);
 
-    #if EX_SELECT == 1
-        
-        while(true) {
+    //mount SD-Card
+    fs.mount(&sd);
+    monitor.set_baud(9600);
+    fflush(stdout);
 
-            // get raw register data
-            readBMP(0xF7, data_buffer, 6);
+    //Set current time to received UART time
+    set_time(0);
+    readDate(&year, &month, &day, &hour, &minute, &second);
+    printf("%d-%d-%d_%d-%d-%d", year, month, day, hour, minute, second);
+    struct tm t;
+    t.tm_year = year - 1900;
+    t.tm_mon = month - 1;
+    t.tm_mday = day;
+    t.tm_hour = hour;
+    t.tm_min = minute;
+    t.tm_sec = second;
+    time_t current_time = mktime(&t);
+    set_time(current_time);
 
-            // construct raw data from registers
-            pressure = ((int32_t) data_buffer[0] << 12) + ((int32_t) data_buffer[1] << 4) + ((int32_t) data_buffer[2] >> 4);
-            temperature = ((int32_t) data_buffer[3] << 12) + ((int32_t) data_buffer[4] << 4) + ((int32_t) data_buffer[5] >> 4);
+    monitor.set_blocking(0);
 
-            // convert raw data to physical values
-            real_pres = calc_press(pressure);
-            real_temp = calc_temp(temperature);
+    printf("\n begin");
+    ThisThread::sleep_for(1s);
 
-            // print out converted data
-            printf("Luftdruck: %d,%d hPa\n", real_pres / 100, real_pres % 100);
-            printf("Temperatur: %d,%d °C\n", real_temp / 100, real_temp % 100);
+    //Format SD-Card if flag was set
+    if (FORMAT_SD_CARD) {
+        printf("Formatting the SD Card... ");
+        fflush(stdout);
+        fs.format(&sd);
+    }
 
-            // 1Hz sampling
-            ThisThread::sleep_for(1s);
+    //Generate a new log file with the correct name and header
+    time_t live_time = time(NULL);
+    printf("\n live time: %u", live_time);
+    char path_buffer[50] = {0};
+    strftime(path_buffer, 50, "/sd/%F_%H-%M-%S.log", localtime(&live_time));
+    printf("\n%s", path_buffer);
+
+    FILE *fp = fopen(path_buffer, "w+");
+    printf("starting log write\n");
+    fprintf(fp, "Time (s), Pressure (hPa), Temperature (degC)\n");
+    fclose(fp);
+
+    bool new_file_state = false;
+
+    while(true) {
+        //Open the last file, if no new file was requested
+        if(!new_file_state) {
+            fp = fopen(path_buffer, "a");
         }
 
-    #endif
+        //Generate a new log file with the correct name and header, if a new file was requested
+        if(new_file_state) {
+            live_time = time(NULL);
+            strftime(path_buffer, 50, "/sd/%F_%H-%M-%S.log", localtime(&live_time));
+            FILE *fp = fopen(path_buffer, "w+");
+            fprintf(fp, "Time (s), Pressure (hPa), Temperature (degC)\n");
+            new_file_state = false;
+            printf("\n new Logfile created");
+        }
 
-    /* ****************************** exercise 2 ****************************** */
+        // get raw register data
+        readBMP(0xF7, data_buffer, 6);
 
-    #if EX_SELECT == 2
+        // construct raw data from registers
+        pressure = ((int32_t) data_buffer[0] << 12) + ((int32_t) data_buffer[1] << 4) + ((int32_t) data_buffer[2] >> 4);
+        temperature = ((int32_t) data_buffer[3] << 12) + ((int32_t) data_buffer[4] << 4) + ((int32_t) data_buffer[5] >> 4);
 
-        InterruptIn button(DEL_LOGS);
-        button.fall(&deleteLogs);
+        // convert raw data to physical values
+        real_pres = calc_press(pressure);
+        real_temp = calc_temp(temperature);
 
-        int err = 0;
-        fprintf(stdout, "Welcome to the filesystem example.\n"); // write to serial
+        // get time
+        time_t live_time = time(NULL);
+        char logtime_buffer[50] = {0};
+        strftime(logtime_buffer, 50, "%H:%M:%S", localtime(&live_time));
 
-        // Try to mount the filesystem
-        printf("Mounting the filesystem... \n");
+        // print data to file
+        fprintf(fp, "%s, %d.%d, %d.%d\n", logtime_buffer, real_pres / 100, real_pres % 100, real_temp / 100, real_temp % 100);
+        printf("\n%s, %d.%d, %d.%d\n", logtime_buffer, real_pres / 100, real_pres % 100, real_temp / 100, real_temp % 100);
+        fclose(fp);
 
-        err = fs.mount(&sd);    
-        /* For some reason an error will be returned at this point,
-        * however, you can ignore it and leave the next line commented
-        */
-        // check_error(err); 
-
-        if (FORMAT_SD_CARD) {
-            printf("Formatting the SD Card... ");
+        // delete file if delete state entered via interrupt
+        if(del_state) {
+            printf("starting format ... ");
             fflush(stdout);
             fs.format(&sd);
-            //check_error(err);
+            printf("formatting done\n");
+            del_state = 0;
+            break;
         }
 
-        time_t logtime = time(NULL);
-        sprintf(path_buffer, "/sd/datalog_%d.txt", (int) logtime);
-        printf(path_buffer);
-        printf("\n");
-        FILE *fp = fopen(path_buffer, "w+");
-        printf("starting log write\n");
-        
-        fprintf(fp, "Time (s), Pressure (hPa), Temperature (degC)\n");
-        fclose(fp);
-        
-        while(true) {
-            fp = fopen(path_buffer, "a");
-            // get raw register data
-            readBMP(0xF7, data_buffer, 6);
-
-            // construct raw data from registers
-            pressure = ((int32_t) data_buffer[0] << 12) + ((int32_t) data_buffer[1] << 4) + ((int32_t) data_buffer[2] >> 4);
-            temperature = ((int32_t) data_buffer[3] << 12) + ((int32_t) data_buffer[4] << 4) + ((int32_t) data_buffer[5] >> 4);
-
-            // convert raw data to physical values
-            real_pres = calc_press(pressure);
-            real_temp = calc_temp(temperature);
-            
-            // get time
-            time_t logtime = time(NULL);
-
-            // print data to file
-            fprintf(fp, "%d, %d.%d, %d.%d\n", logtime, real_pres / 100, real_pres % 100, real_temp / 100, real_temp % 100);
-            fclose(fp);
-            // delete file if delete state entered via interrupt
-            if(del_state) {
-                
-                printf("starting format ... ");
-                fflush(stdout);
-                fs.format(&sd);
-                printf("formatting done\n");
-                del_state = false;
-                set_time(0);
-                break;
-            }
-            
-            ThisThread::sleep_for(1s);
-        }
-
-        fs.unmount();
-
-    #endif
-    
-    /* ****************************** exercise 3 ****************************** */
-
-    #if EX_SELECT == 3
-        struct tm t;
-        time_t current_time;
-        time_t live_time;
-        char path_buffer[50] = {0};
-        char logtime_buffer[50] = {0};
-
-        bool new_file_state = 0;
-           
-        const char * erase_cmd = "erase all";
-        const char * newfile_cmd = "new log";
+        //Set buffers to read serial data to, user buffer gets refreshed each cycle, total_user_buffer stays
+        auto user_buffer = new char[10];
+        user_buffer[0] = '\0';
+        auto total_user_buffer = new char[10];
 
         int total_length = 0;
-        int length = 0;
+        int length = monitor.read(user_buffer, sizeof(user_buffer));
+        if(length > 0)
+            total_length += length;
+        strncat(total_user_buffer, user_buffer, length);
 
-        auto user_buffer_c = new char[1];
-        auto total_user_buffer = new char[10];
-        auto user_buffer = new char[10];
+        printf("\n%d : %s - %s",total_length, total_user_buffer, user_buffer);
 
-        int user_status;
-
-        InterruptIn button(DEL_LOGS);
-        button.fall(&deleteLogs);
-        
-        /*for (int i = 0; i < 50; i ++) {
-            path_buffer[i] = 0;
+        //erase total_user_buffer if it is full
+        if(total_length > 9) {
+            total_length = 0;
+            total_user_buffer[0] = '\0';
         }
-        path_buffer[0] = '\0';*/
-        fs.mount(&sd);
-        monitor.set_baud(9600);
-        fflush(stdout);
-        set_time(0);
-        
-        readDate(&year, &month, &day, &hour, &minute, &second);
-        printf("%d-%d-%d_%d-%d-%d", year, month, day, hour, minute, second);
-        t.tm_year = year - 1900;
-        t.tm_mon = month - 1;
-        t.tm_mday = day;
-        t.tm_hour = hour;
-        t.tm_min = minute;
-        t.tm_sec = second;
-        current_time = mktime(&t);
 
-        monitor.set_blocking(0);
+        //erase all files, if "erase all" was entered via UART
+        const char* erase_cmd = "erase all";
+        if(strcmp(total_user_buffer, erase_cmd) == 0) {
+            del_state = 1;
+            total_length = 0;
+            total_user_buffer[0] = '\0';
+        }
 
-        printf("\n begin");
-        set_time(current_time);
+        //Create a new log file, if "new log" was entered via UART
+        const char* newfile_cmd = "new log";
+        if(strcmp(total_user_buffer, newfile_cmd) == 0) {
+            new_file_state = true;
+            total_length = 0;
+            total_user_buffer[0] = '\0';
+        }
+
         ThisThread::sleep_for(1s);
+    }
 
-        if (FORMAT_SD_CARD) {
-            printf("Formatting the SD Card... ");
-            fflush(stdout);
-            fs.format(&sd);
-            //check_error(err);
-        }
-
-        live_time = time(NULL);
-        printf("\n live time: %u", live_time);
-        strftime(path_buffer, 50, "/sd/%F_%H-%M-%S.log", localtime(&live_time));
-        printf("\n%s", path_buffer);
-
-        //sprintf(path_buffer, "/sd/%d-%d-%d_%d-%d-%d.txt", year, month, day, hour, minute, second);
-        
-        FILE *fp = fopen(path_buffer, "w+");
-        printf("starting log write\n");
-        fprintf(fp, "Time (s), Pressure (hPa), Temperature (degC)\n");
-        fclose(fp);
-        
-        
-        while(true) {
-
-            if(!new_file_state) {
-                fp = fopen(path_buffer, "a");
-            }
-
-            if(new_file_state) {
-                
-                live_time = time(NULL);
-                strftime(path_buffer, 50, "/sd/%F_%H-%M-%S.log", localtime(&live_time));
-                FILE *fp = fopen(path_buffer, "w+");
-                fprintf(fp, "Time (s), Pressure (hPa), Temperature (degC)\n");
-                new_file_state = 0;
-                printf("\n new Logfile created");
-            }
-
-            
-                
-            // get raw register data
-            readBMP(0xF7, data_buffer, 6);
-            
-            // construct raw data from registers
-            pressure = ((int32_t) data_buffer[0] << 12) + ((int32_t) data_buffer[1] << 4) + ((int32_t) data_buffer[2] >> 4);
-            temperature = ((int32_t) data_buffer[3] << 12) + ((int32_t) data_buffer[4] << 4) + ((int32_t) data_buffer[5] >> 4);
-
-            // convert raw data to physical values
-            real_pres = calc_press(pressure);
-            real_temp = calc_temp(temperature);
-            
-            // get time
-            time_t live_time = time(NULL);
-            strftime(logtime_buffer, 50, "%H:%M:%S", localtime(&live_time));
-
-            // print data to file
-            fprintf(fp, "%s, %d.%d, %d.%d\n", logtime_buffer, real_pres / 100, real_pres % 100, real_temp / 100, real_temp % 100);
-            printf("\n%s, %d.%d, %d.%d\n", logtime_buffer, real_pres / 100, real_pres % 100, real_temp / 100, real_temp % 100);
-            fclose(fp);
-            // delete file if delete state entered via interrupt
-
-            if(del_state) {
-
-                printf("starting format ... ");
-                fflush(stdout);
-                fs.format(&sd);
-                printf("formatting done\n");
-                del_state = 0;
-                break;
-            }
-            
-            //while(!monitor.readable())
-            //    ;
-            user_buffer[0] = '\0';
-            length = monitor.read(user_buffer, sizeof(user_buffer));
-            if(length > 0)
-                total_length += length;
-            strncat(total_user_buffer, user_buffer, length);
-
-            printf("\n%d : %s - %s",total_length, total_user_buffer, user_buffer);
-
-            if(total_length > 9) {
-                total_length = 0;
-                total_user_buffer[0] = '\0';
-            }
-
-            if(strcmp(total_user_buffer, erase_cmd) == 0) {
-                del_state = 1;
-                total_length = 0;
-                total_user_buffer[0] = '\0';
-            }
-                
-            if(strcmp(total_user_buffer, newfile_cmd) == 0) {
-                new_file_state = 1;
-                total_length = 0;
-                total_user_buffer[0] = '\0';
-            }
-                
-
-            
-            ThisThread::sleep_for(1s);
-        }
-
-        fs.unmount();
-
-    #endif
+    fs.unmount();
 
 }
-
-
