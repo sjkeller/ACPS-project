@@ -26,6 +26,8 @@ BME280::BME280(const PinName sdaPin, const PinName sclPin, const int bme280Add) 
 
 void BME280::wakeUp() {
     constexpr int wakeUpValue = (7 << 5) + (7 << 2) + 3;
+    //writeBMP(0xF4, (7 << 5) + (7 << 2) + 3);
+    //writeBMP(modeRegister, (7 << 5) + (7 << 2) + 3);
     writeBMP(modeRegister, wakeUpValue);
     //Wait for wake up
     ThisThread::sleep_for(200ms);
@@ -58,7 +60,12 @@ int BME280::writeBMP(char address, char value) {
     char write_array[2];
     write_array[0] = address;
     write_array[1] = value;
-    return bus->write(sensorAdd << 1, write_array, 2);
+    int returnValue = bus->write(sensorAdd << 1, write_array, 2);
+    /*
+    address = 0x88;
+    int returnValue = bus->write(sensorAdd << 1, &address, 1);
+    */
+    return returnValue;
 }
 
 /*!
