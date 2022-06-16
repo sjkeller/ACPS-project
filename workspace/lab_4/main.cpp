@@ -5,7 +5,8 @@ const PinName sdaPin = PB_9;
 const PinName sclPin = PB_8;
 I2C* bus = new I2C(sdaPin, sclPin);
 const int bme280Add = 0x76;
-BMP280* sensor = new BMP280(bus, sensor);
+
+BMP280* sensor = new BMP280(bus, bme280Add);
 
 float temp;
 float press;
