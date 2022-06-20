@@ -24,6 +24,7 @@
 
 // Application helpers
 #include "DummySensor.h"
+#include "BMP280.h"
 #include "trace_helper.h"
 #include "lora_radio_helper.h"
 
@@ -32,12 +33,15 @@ using namespace events;
 // Max payload size can be LORAMAC_PHY_MAXPAYLOAD.
 // This example only communicates with much shorter messages (<35 bytes).
 // If longer messages are used, these buffers must be changed accordingly.
-uint8_t tx_buffer[35];
-uint8_t rx_buffer[35];
+uint8_t tx_buffer[42];
+uint8_t rx_buffer[42];
 
 // Variable to store the DEV-EUI for this board
 uint8_t eui [] = MBED_CONF_LORA_DEVICE_EUI; // (obsolete), retrieve EUI value that was set via mbed_app.json
 
+const PinName sdaPin = PB_9;
+const PinName sclPin = PB_8;
+const int bme280Add = 0x76;
 
 /*
  * Sets up an application dependent transmission timer in ms. Used only when Duty Cycling is off for testing
@@ -75,6 +79,13 @@ DigitalOut led(LED1);
 /**
  * Dummy sensor class object
  */
+
+
+
+I2C* bus = new I2C(sdaPin, sclPin);
+
+
+BMP280* sensor = new BMP280(bus, bme280Add);
 DS1820  ds1820(PC_9);
 
 /**
@@ -119,6 +130,7 @@ int main(void)
 
     // setup tracing
     setup_trace();
+    sensor->wakeUp();
 
     // stores the status of a call to LoRaWAN protocol
     lorawan_status_t retcode;
@@ -167,6 +179,8 @@ int main(void)
 
     printf("\r\n Connection - In Progress ...\r\n");
 
+    
+
     // make your event queue dispatching events forever
     ev_queue.dispatch_forever();
 
@@ -182,19 +196,22 @@ static void send_message()
     uint16_t packet_len;
     int16_t retcode;
     int32_t sensor_value;
-
-    if (ds1820.begin()) {
+    
+    /*if (ds1820.begin()) {
         ds1820.startConversion();
         sensor_value = ds1820.read();
         printf("\r\n Dummy Sensor Value = %d \r\n", sensor_value);
         ds1820.startConversion();
+    
     } else {
         printf("\r\n No sensor found \r\n");
         return;
     }
-
+    */
+    
     // choose test message
-    packet_len = sprintf((char *) tx_buffer, "Dummy Sensor Value is %d", sensor_value); //send dummy sensor value
+    packet_len = sprintf((char *) tx_buffer, "Temperature: %f °C, Pressure %f hPa", sensor->getTemperature(), sensor->getPressure());
+    //packet_len = sprintf((char *) tx_buffer, "Dummy Sensor Value is %d", sensor_value); //send dummy sensor value
     // packet_len = sprintf((char *) tx_buffer, "Hello world! This is LoRa #%02x!", eui[7]); //send "hello world" message
   
     led = !led; //toggle LED 
@@ -252,12 +269,16 @@ static void lora_event_handler(lorawan_event_t event)
     switch (event) {
         case CONNECTED:
             printf("\r\n Connection - Successful \r\n");
+            
             if (MBED_CONF_LORA_DUTY_CYCLE_ON) {
                 send_message();
+                //receive_message();
             } else {
                 ev_queue.call_every(TX_TIMER, send_message);
             }
             break;
+
+   
         case DISCONNECTED:
             ev_queue.break_dispatch();
             printf("\r\n Disconnected Successfully \r\n");
