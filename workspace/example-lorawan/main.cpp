@@ -47,7 +47,10 @@ const int bme280Add = 0x76;
  * Sets up an application dependent transmission timer in ms. Used only when Duty Cycling is off for testing
  */
 // #define TX_TIMER                        4000ms
-#define TX_TIMER                        10s
+#define READ_TIMER 200ms
+#define UART_TIMER 1s
+#define SD_TIMER 5s
+#define LORA_TIMER 5s
 
 /*
  * Waiting time until retry of a failed transmission
@@ -69,7 +72,7 @@ DigitalOut led(LED1);
 /**
  * Maximum number of retries for CONFIRMED messages before giving up
  */
-#define CONFIRMED_MSG_RETRY_COUNTER     3 
+#define CONFIRMED_MSG_RETRY_COUNTER     3
 
 /**
  * Dummy pin for dummy sensor
@@ -179,7 +182,7 @@ int main(void)
 
     printf("\r\n Connection - In Progress ...\r\n");
 
-    
+
 
     // make your event queue dispatching events forever
     ev_queue.dispatch_forever();
@@ -188,33 +191,32 @@ int main(void)
 }
 
 
+uint16_t packet_len;
 /**
  * Sends a message to the Network Server
  */
 static void send_message()
 {
-    uint16_t packet_len;
     int16_t retcode;
     int32_t sensor_value;
-    
+
     /*if (ds1820.begin()) {
         ds1820.startConversion();
         sensor_value = ds1820.read();
         printf("\r\n Dummy Sensor Value = %d \r\n", sensor_value);
         ds1820.startConversion();
-    
+
     } else {
         printf("\r\n No sensor found \r\n");
         return;
     }
     */
-    
+
     // choose test message
-    packet_len = sprintf((char *) tx_buffer, "Temperature: %f °C, Pressure %f hPa", sensor->getTemperature(), sensor->getPressure());
     //packet_len = sprintf((char *) tx_buffer, "Dummy Sensor Value is %d", sensor_value); //send dummy sensor value
     // packet_len = sprintf((char *) tx_buffer, "Hello world! This is LoRa #%02x!", eui[7]); //send "hello world" message
-  
-    led = !led; //toggle LED 
+
+    led = !led; //toggle LED
 
     retcode = lorawan.send(MBED_CONF_LORA_APP_PORT, tx_buffer, packet_len,
                            MSG_UNCONFIRMED_FLAG);
@@ -226,7 +228,7 @@ static void send_message()
         if (retcode == LORAWAN_STATUS_WOULD_BLOCK) {
             //retry in 3 seconds
             if (MBED_CONF_LORA_DUTY_CYCLE_ON) {
-                ev_queue.call_in(RETRY_INTERVAL, send_message); 
+                ev_queue.call_in(RETRY_INTERVAL, send_message);
             }
         }
         return;
@@ -236,6 +238,22 @@ static void send_message()
     memset(tx_buffer, 0, sizeof(tx_buffer));
 }
 
+float temp = 0.0;
+float pres = 0.0;
+
+void readData() {
+    temp = sensor->getTemperature();
+    pres = sensor->getPressure();
+    packet_len = sprintf((char *) tx_buffer, "Temperature: %f °C, Pressure %f hPa", temp, pres);
+}
+
+void printUART() {
+    printf("Temperature: %f °C, Pressure %f hPa", temp, pres);
+}
+
+void saveSD() {
+
+}
 /**
  * Receive a message from the Network Server
  */
@@ -256,7 +274,7 @@ static void receive_message()
         printf("%c", (char)rx_buffer[i]); //convert bytes to char and print the received msg
     }
     printf("\r\n");
-    
+
     memset(rx_buffer, 0, sizeof(rx_buffer));
 }
 
@@ -266,19 +284,22 @@ static void receive_message()
  */
 static void lora_event_handler(lorawan_event_t event)
 {
+    ev_queue.call_every(READ_TIMER, readData);
+    ev_queue.call_every(UART_TIMER, printUART);
+    ev_queue.call_every(SD_TIMER, saveSD);
     switch (event) {
         case CONNECTED:
             printf("\r\n Connection - Successful \r\n");
-            
+
             if (MBED_CONF_LORA_DUTY_CYCLE_ON) {
                 send_message();
                 //receive_message();
             } else {
-                ev_queue.call_every(TX_TIMER, send_message);
+                ev_queue.call_every(LORA_TIMER, send_message);
             }
             break;
 
-   
+
         case DISCONNECTED:
             ev_queue.break_dispatch();
             printf("\r\n Disconnected Successfully \r\n");
@@ -287,7 +308,7 @@ static void lora_event_handler(lorawan_event_t event)
             printf("\r\n Message Sent to Network Server \r\n");
             if (MBED_CONF_LORA_DUTY_CYCLE_ON) {
                 send_message();
-            } 
+            }
             break;
         case TX_TIMEOUT:
         case TX_ERROR:

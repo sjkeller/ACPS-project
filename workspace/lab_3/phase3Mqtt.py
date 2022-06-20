@@ -2,8 +2,8 @@ import paho.mqtt.client as mqtt
 
 broker = "134.28.36.100"
 port = 1883
-topic_receive = "acps/receive_from/lora_10"
-topic_publish = "acps/send_to/lora_10"
+topic_receive = "acps/receive_from/lora_8"
+topic_publish = "acps/send_to/lora_8"
 """
 topic_receive = "acps/group_2"
 topic_publish = "acps/group_2"
