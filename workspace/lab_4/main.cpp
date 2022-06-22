@@ -134,6 +134,7 @@ int ev_log_id;
 int ev_sensor_id;
 int ev_lora_id;
 int ev_uart_id;
+int ev_lora_receive_id;
 bool ev_log_closed = 0;
 bool ev_sensor_closed = 0;
 bool ev_lora_closed = 0;
@@ -234,6 +235,8 @@ int main(void)
     return 0;
 }
 
+float temp = 0.0;
+float pres = 0.0;
 
 uint16_t packet_len;
 /**
@@ -241,6 +244,10 @@ uint16_t packet_len;
  */
 static void send_message()
 {
+    if (ev_sensor_closed) {
+        packet_len = sprintf((char *) tx_buffer, "Temperature: %f gradC, Pressure %f hPa", temp, pres);
+    }
+    
     int16_t retcode;
     int32_t sensor_value;
 
@@ -285,9 +292,31 @@ static void send_message()
     memset(tx_buffer, 0, sizeof(tx_buffer));
     printf("After memset");
 }
+static void send_empty_message()
+{
+    packet_len = 0;
+    
+    int16_t retcode;
 
-float temp = 0.0;
-float pres = 0.0;
+    led = !led; //toggle LED
+
+    retcode = lorawan.send(MBED_CONF_LORA_APP_PORT, tx_buffer, packet_len,
+                           MSG_UNCONFIRMED_FLAG);
+
+    printf("retcode: %d", retcode);
+
+    if (retcode < 0) { // Failed to send message (duty-cycle violation?
+        retcode == LORAWAN_STATUS_WOULD_BLOCK ? printf("send - WOULD BLOCK\r\n")
+        : printf("\r\n send() - Error code %d \r\n", retcode);
+        return;
+    }
+
+    printf("\r\n %d bytes scheduled for transmission... \r\n", retcode);
+    memset(tx_buffer, 0, sizeof(tx_buffer));
+    printf("After memset");
+}
+
+
 
 void readData() {
     temp = sensor->getTemperature();
@@ -384,6 +413,7 @@ static void receive_message()
             printf("lora already running!\r\n");
         }
         else {
+            ev_queue.cancel(ev_lora_receive_id);
             ev_lora_id = ev_queue.call_every(LORA_TIMER, send_message);
             ev_lora_closed = 0;
             printf("lora started\r\n");
@@ -391,8 +421,10 @@ static void receive_message()
     }
     else if (!strcmp((const char*)rx_buffer, "lora stop")) {
         ev_lora_closed = ev_queue.cancel(ev_lora_id);
-        if (ev_lora_closed)
+        if (ev_lora_closed) {
             printf("lora stopped\r\n");
+            ev_lora_receive_id = ev_queue.call_every(LORA_TIMER, send_empty_message);
+        }
         else {
             printf("lora couldn't be stopped!\r\n");
             ev_log_closed = 1;
@@ -443,6 +475,7 @@ static void lora_event_handler(lorawan_event_t event)
             ev_lora_id = ev_queue.call_every(LORA_TIMER, send_message);
             ev_uart_id = ev_queue.call_every(UART_TIMER, printUART);
             ev_log_id = ev_queue.call_every(SD_TIMER, saveSD);
+            //ev_queue.call_every(10s, receive_message);
             /*
             if (MBED_CONF_LORA_DUTY_CYCLE_ON) {
                 send_message();
