@@ -18,6 +18,8 @@
 #include <cstdio>
 #include <stdio.h>
 
+
+
 #include "lorawan/LoRaWANInterface.h"
 #include "lorawan/system/lorawan_data_structures.h"
 #include "events/EventQueue.h"
@@ -27,6 +29,10 @@
 #include "BMP280.h"
 #include "trace_helper.h"
 #include "lora_radio_helper.h"
+
+#include "SDBlockDevice.h"
+#include "FATFileSystem.h"
+//#include "SDFileSystem.h"
 
 using namespace events;
 
@@ -124,13 +130,42 @@ static lorawan_app_callbacks_t callbacks;
  */
  static lorawan_connect_t connection;
 
+void formatSD() {
+    //mount SD-Card
+    SDBlockDevice sd(MBED_CONF_SD_SPI_MOSI,
+                 MBED_CONF_SD_SPI_MISO,
+                 MBED_CONF_SD_SPI_CLK,
+                 MBED_CONF_SD_SPI_CS);
+    FATFileSystem fs("sd", &sd);
+    const int mounted = fs.mount(&sd);
+    printf("Mounted with code %d", mounted);
+    printf("starting format ... ");
+    fflush(stdout);
+    fs.format(&sd);
+    printf("formatting done\n");
+    fflush(stdout);
+    /*
+    //Generate a new log file with the correct name and header
+    time_t live_time = time(NULL);
+    printf("\n live time: %u", live_time);
+    char path_buffer[50] = {0};
+    strftime(path_buffer, 50, "/sd/%F_%H-%M-%S.log", localtime(&live_time));
+    printf("\n%s", path_buffer);
 
+    FILE *fp = fopen(path_buffer, "w+");
+    */
+    char path_buffer[2] = "a";
+    //FILE *fp = fopen(path_buffer, "w+");
+    printf("starting log write\n");
+    //fprintf(fp, "Time (s), Pressure (hPa), Temperature (degC)\n");
+    //fclose(fp);
+}
 /**
  * Entry point for application
  */
 int main(void)
 {
-
+    //formatSD();
     // setup tracing
     setup_trace();
     sensor->wakeUp();
@@ -249,14 +284,27 @@ void readData() {
     temp = sensor->getTemperature();
     pres = sensor->getPressure();
     packet_len = sprintf((char *) tx_buffer, "Temperature: %f °C, Pressure %f hPa", temp, pres);
+    printf("Read %d bytes of data\r\n", packet_len);
 }
 
 void printUART() {
     printf("Temperature: %f °C, Pressure %f hPa\r\n", temp, pres);
 }
 
-void saveSD() {
 
+
+void saveSD() {
+/*
+    time_t live_time = time(NULL);
+    strftime(path_buffer, 50, "/sd/%F_%H-%M-%S.log", localtime(&live_time));
+    FILE *fp = fopen(path_buffer, "w+");
+    fprintf(fp, "Time (s), Pressure (hPa), Temperature (degC)\n");
+
+    // print data to file
+    fprintf(fp, "%s, %d.%d, %d.%d\n", logtime_buffer, real_pres / 100, real_pres % 100, real_temp / 100, real_temp % 100);
+    printf("\n%s, %d.%d, %d.%d\n", logtime_buffer, real_pres / 100, real_pres % 100, real_temp / 100, real_temp % 100);
+    fclose(fp);
+*/
 }
 /**
  * Receive a message from the Network Server
@@ -298,8 +346,9 @@ static void lora_event_handler(lorawan_event_t event)
             //ev_queue.call_in(LORA_TIMER, lora_event_handler, CONNECTED);
             ev_queue.call_every(READ_TIMER, readData);
             ev_queue.call_every(LORA_TIMER, send_message);
-    //ev_queue.call_every(UART_TIMER, printUART);
-    //ev_queue.call_every(SD_TIMER, saveSD);
+            ev_queue.call_every(UART_TIMER, printUART);
+            
+            //ev_queue.call_every(SD_TIMER, saveSD);
             /*
             if (MBED_CONF_LORA_DUTY_CYCLE_ON) {
                 send_message();
