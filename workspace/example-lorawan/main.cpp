@@ -16,6 +16,7 @@
  */
 #include "mbed.h"
 #include <cstdio>
+#include <cstring>
 #include <stdio.h>
 
 
@@ -35,7 +36,6 @@
 //#include "SDFileSystem.h"
 
 using namespace events;
-
 // Max payload size can be LORAMAC_PHY_MAXPAYLOAD.
 // This example only communicates with much shorter messages (<35 bytes).
 // If longer messages are used, these buffers must be changed accordingly.
@@ -130,6 +130,14 @@ static lorawan_app_callbacks_t callbacks;
  */
  static lorawan_connect_t connection;
 
+int ev_log_id;
+int ev_sensor_id;
+int ev_lora_id;
+int ev_uart_id;
+bool ev_log_closed = 0;
+bool ev_sensor_closed = 0;
+bool ev_lora_closed = 0;
+bool ev_uart_closed = 0;
 void formatSD() {
     //mount SD-Card
     SDBlockDevice sd(MBED_CONF_SD_SPI_MOSI,
@@ -283,12 +291,12 @@ float pres = 0.0;
 void readData() {
     temp = sensor->getTemperature();
     pres = sensor->getPressure();
-    packet_len = sprintf((char *) tx_buffer, "Temperature: %f °C, Pressure %f hPa", temp, pres);
+    packet_len = sprintf((char *) tx_buffer, "Temperature: %f gradC, Pressure %f hPa", temp, pres);
     printf("Read %d bytes of data\r\n", packet_len);
 }
 
 void printUART() {
-    printf("Temperature: %f °C, Pressure %f hPa\r\n", temp, pres);
+    printf("Temperature: %f gradC, Pressure %f hPa\r\n", temp, pres);
 }
 
 
@@ -314,7 +322,6 @@ static void receive_message()
     uint8_t port;
     int flags;
     int16_t retcode = lorawan.receive(rx_buffer, sizeof(rx_buffer), port, flags);
-
     if (retcode < 0) {
         printf("\r\n receive() - Error code %d \r\n", retcode);
         return;
@@ -326,6 +333,84 @@ static void receive_message()
         printf("%c", (char)rx_buffer[i]); //convert bytes to char and print the received msg
     }
     printf("\r\n");
+    
+    // Sensor measurment control
+    if (!strcmp((const char*)rx_buffer, "sensor start")) {
+        if(!ev_sensor_closed) {
+            printf("sensor measurement already running!\r\n");
+        }
+        else {
+            ev_sensor_id = ev_queue.call_every(READ_TIMER, readData);
+            ev_sensor_closed = 0;
+            printf("sensor measurement started\r\n");
+        }
+    }
+    else if (!strcmp((const char*)rx_buffer, "sensor stop")) {
+        ev_sensor_closed = ev_queue.cancel(ev_sensor_id);
+        if (ev_sensor_closed)
+            printf("sensor measurement stopped\r\n");
+        else
+            printf("sensor measurment couldn't be sotopped!");
+    }
+
+    // data logging control
+    else if (!strcmp((const char*)rx_buffer, "log start")) {
+        if(!ev_log_closed) {
+            printf("logging already running!\r\n");
+        }
+        else {
+            ev_log_id = ev_queue.call_every(SD_TIMER, saveSD);
+            ev_log_closed = 0;
+            printf("data logging started\r\n");
+        }
+    }
+    else if (!strcmp((const char*)rx_buffer, "log stop")) {
+        ev_log_closed = ev_queue.cancel(ev_log_id);
+        if (ev_log_closed)
+            printf("data logging stopped\r\n");
+        else
+            printf("data logging couldn't be stopped!\r\n");;
+    }
+
+    // lora control
+    else if (!strcmp((const char*)rx_buffer, "lora start")) {
+        if(!ev_lora_closed) {
+            printf("lora already running!\r\n");
+        }
+        else {
+            ev_lora_id = ev_queue.call_every(LORA_TIMER, send_message);
+            ev_lora_closed = 0;
+            printf("lora started\r\n");
+        }
+    }
+    else if (!strcmp((const char*)rx_buffer, "lora stop")) {
+        ev_lora_closed = ev_queue.cancel(ev_lora_id);
+        if (ev_lora_closed)
+            printf("lora stopped\r\n");
+        else
+            printf("lora couldn't be stopped!\r\n");;
+    }
+
+    // UART control
+    else if (!strcmp((const char*)rx_buffer, "uart start")) {
+        if(!ev_uart_closed) {
+            printf("uart already running!\r\n");
+        }
+        else {
+            ev_uart_id = ev_queue.call_every(UART_TIMER, printUART);
+            ev_uart_closed = 0;
+            printf("uart started\r\n");
+        }
+    }
+    else if (!strcmp((const char*)rx_buffer, "uart stop")) {
+        ev_uart_closed = ev_queue.cancel(ev_uart_id);
+        if (ev_uart_closed)
+            printf("uart stopped\r\n");
+        else
+            printf("uart couldn't be stopped!\r\n");;
+    }
+    
+        
 
     memset(rx_buffer, 0, sizeof(rx_buffer));
 }
@@ -344,11 +429,10 @@ static void lora_event_handler(lorawan_event_t event)
             //readData();
             //send_message();
             //ev_queue.call_in(LORA_TIMER, lora_event_handler, CONNECTED);
-            ev_queue.call_every(READ_TIMER, readData);
-            ev_queue.call_every(LORA_TIMER, send_message);
-            ev_queue.call_every(UART_TIMER, printUART);
-            
-            //ev_queue.call_every(SD_TIMER, saveSD);
+            ev_sensor_id = ev_queue.call_every(READ_TIMER, readData);
+            ev_lora_id = ev_queue.call_every(LORA_TIMER, send_message);
+            ev_uart_id = ev_queue.call_every(UART_TIMER, printUART);
+            ev_log_id = ev_queue.call_every(SD_TIMER, saveSD);
             /*
             if (MBED_CONF_LORA_DUTY_CYCLE_ON) {
                 send_message();
