@@ -33,8 +33,8 @@ using namespace events;
 // Max payload size can be LORAMAC_PHY_MAXPAYLOAD.
 // This example only communicates with much shorter messages (<35 bytes).
 // If longer messages are used, these buffers must be changed accordingly.
-uint8_t tx_buffer[42];
-uint8_t rx_buffer[42];
+uint8_t tx_buffer[70];
+uint8_t rx_buffer[70];
 
 // Variable to store the DEV-EUI for this board
 uint8_t eui [] = MBED_CONF_LORA_DEVICE_EUI; // (obsolete), retrieve EUI value that was set via mbed_app.json
@@ -221,21 +221,25 @@ static void send_message()
     retcode = lorawan.send(MBED_CONF_LORA_APP_PORT, tx_buffer, packet_len,
                            MSG_UNCONFIRMED_FLAG);
 
+    printf("retcode: %d", retcode);
+
     if (retcode < 0) { // Failed to send message (duty-cycle violation?
         retcode == LORAWAN_STATUS_WOULD_BLOCK ? printf("send - WOULD BLOCK\r\n")
         : printf("\r\n send() - Error code %d \r\n", retcode);
-
+        /*
         if (retcode == LORAWAN_STATUS_WOULD_BLOCK) {
             //retry in 3 seconds
             if (MBED_CONF_LORA_DUTY_CYCLE_ON) {
                 ev_queue.call_in(RETRY_INTERVAL, send_message);
             }
         }
+        */
         return;
     }
 
     printf("\r\n %d bytes scheduled for transmission... \r\n", retcode);
     memset(tx_buffer, 0, sizeof(tx_buffer));
+    printf("After memset");
 }
 
 float temp = 0.0;
@@ -248,7 +252,7 @@ void readData() {
 }
 
 void printUART() {
-    printf("Temperature: %f °C, Pressure %f hPa", temp, pres);
+    printf("Temperature: %f °C, Pressure %f hPa\r\n", temp, pres);
 }
 
 void saveSD() {
@@ -284,19 +288,26 @@ static void receive_message()
  */
 static void lora_event_handler(lorawan_event_t event)
 {
-    ev_queue.call_every(READ_TIMER, readData);
-    ev_queue.call_every(UART_TIMER, printUART);
-    ev_queue.call_every(SD_TIMER, saveSD);
+
+    printf("\r\nEvent: %d\r\n", event);
     switch (event) {
         case CONNECTED:
             printf("\r\n Connection - Successful \r\n");
-
+            //readData();
+            //send_message();
+            //ev_queue.call_in(LORA_TIMER, lora_event_handler, CONNECTED);
+            ev_queue.call_every(READ_TIMER, readData);
+            ev_queue.call_every(LORA_TIMER, send_message);
+    //ev_queue.call_every(UART_TIMER, printUART);
+    //ev_queue.call_every(SD_TIMER, saveSD);
+            /*
             if (MBED_CONF_LORA_DUTY_CYCLE_ON) {
                 send_message();
                 //receive_message();
             } else {
-                ev_queue.call_every(LORA_TIMER, send_message);
-            }
+                */
+                //ev_queue.call_every(LORA_TIMER, send_message);
+            //}
             break;
 
 
@@ -306,9 +317,11 @@ static void lora_event_handler(lorawan_event_t event)
             break;
         case TX_DONE:
             printf("\r\n Message Sent to Network Server \r\n");
+            /*
             if (MBED_CONF_LORA_DUTY_CYCLE_ON) {
                 send_message();
             }
+            */
             break;
         case TX_TIMEOUT:
         case TX_ERROR:

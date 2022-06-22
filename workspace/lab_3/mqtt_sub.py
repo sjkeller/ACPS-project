@@ -3,7 +3,7 @@ import time
 
 def on_connect(client, userdata, flags, rc):
 	print("connected with result code", str(rc))
-	client.subscribe("acps/receive_from/lora_8")
+	client.subscribe("acps/receive_from/lora_10")
 	
 def on_message(client, userdata, msg):
 	print(msg.topic, str(msg.payload))
