@@ -1,19 +1,3 @@
-/**
- * Copyright (c) 2017, Arm Limited and affiliates.
- * SPDX-License-Identifier: Apache-2.0
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 #include "mbed.h"
 #include <cstdio>
 #include <cstring>
@@ -227,9 +211,6 @@ int main(void)
 
     printf("\r\n Connection - In Progress ...\r\n");
 
-
-
-    // make your event queue dispatching events forever
     ev_queue.dispatch_forever();
 
     return 0;
@@ -249,23 +230,6 @@ static void send_message()
     }
     
     int16_t retcode;
-    int32_t sensor_value;
-
-    /*if (ds1820.begin()) {
-        ds1820.startConversion();
-        sensor_value = ds1820.read();
-        printf("\r\n Dummy Sensor Value = %d \r\n", sensor_value);
-        ds1820.startConversion();
-
-    } else {
-        printf("\r\n No sensor found \r\n");
-        return;
-    }
-    */
-
-    // choose test message
-    //packet_len = sprintf((char *) tx_buffer, "Dummy Sensor Value is %d", sensor_value); //send dummy sensor value
-    // packet_len = sprintf((char *) tx_buffer, "Hello world! This is LoRa #%02x!", eui[7]); //send "hello world" message
 
     led = !led; //toggle LED
 
@@ -274,17 +238,9 @@ static void send_message()
 
     printf("retcode: %d", retcode);
 
-    if (retcode < 0) { // Failed to send message (duty-cycle violation?
+    if (retcode < 0) {
         retcode == LORAWAN_STATUS_WOULD_BLOCK ? printf("send - WOULD BLOCK\r\n")
         : printf("\r\n send() - Error code %d \r\n", retcode);
-        /*
-        if (retcode == LORAWAN_STATUS_WOULD_BLOCK) {
-            //retry in 3 seconds
-            if (MBED_CONF_LORA_DUTY_CYCLE_ON) {
-                ev_queue.call_in(RETRY_INTERVAL, send_message);
-            }
-        }
-        */
         return;
     }
 
@@ -468,36 +424,17 @@ static void lora_event_handler(lorawan_event_t event)
     switch (event) {
         case CONNECTED:
             printf("\r\n Connection - Successful \r\n");
-            //readData();
-            //send_message();
-            //ev_queue.call_in(LORA_TIMER, lora_event_handler, CONNECTED);
             ev_sensor_id = ev_queue.call_every(READ_TIMER, readData);
             ev_lora_id = ev_queue.call_every(LORA_TIMER, send_message);
             ev_uart_id = ev_queue.call_every(UART_TIMER, printUART);
             ev_log_id = ev_queue.call_every(SD_TIMER, saveSD);
-            //ev_queue.call_every(10s, receive_message);
-            /*
-            if (MBED_CONF_LORA_DUTY_CYCLE_ON) {
-                send_message();
-                //receive_message();
-            } else {
-                */
-                //ev_queue.call_every(LORA_TIMER, send_message);
-            //}
             break;
-
-
         case DISCONNECTED:
             ev_queue.break_dispatch();
             printf("\r\n Disconnected Successfully \r\n");
             break;
         case TX_DONE:
             printf("\r\n Message Sent to Network Server \r\n");
-            /*
-            if (MBED_CONF_LORA_DUTY_CYCLE_ON) {
-                send_message();
-            }
-            */
             break;
         case TX_TIMEOUT:
         case TX_ERROR:
