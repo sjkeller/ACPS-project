@@ -138,6 +138,7 @@ bool ev_log_closed = 0;
 bool ev_sensor_closed = 0;
 bool ev_lora_closed = 0;
 bool ev_uart_closed = 0;
+
 void formatSD() {
     //mount SD-Card
     SDBlockDevice sd(MBED_CONF_SD_SPI_MOSI,
@@ -347,10 +348,13 @@ static void receive_message()
     }
     else if (!strcmp((const char*)rx_buffer, "sensor stop")) {
         ev_sensor_closed = ev_queue.cancel(ev_sensor_id);
-        if (ev_sensor_closed)
+        if (ev_sensor_closed) {
             printf("sensor measurement stopped\r\n");
-        else
-            printf("sensor measurment couldn't be sotopped!");
+        }
+        else {
+            printf("sensor measurment couldn't be stopped!");
+            ev_sensor_closed = 1;
+        }
     }
 
     // data logging control
@@ -368,8 +372,10 @@ static void receive_message()
         ev_log_closed = ev_queue.cancel(ev_log_id);
         if (ev_log_closed)
             printf("data logging stopped\r\n");
-        else
-            printf("data logging couldn't be stopped!\r\n");;
+        else {
+            printf("data logging couldn't be stopped!\r\n");
+            ev_log_closed = 1;
+        }
     }
 
     // lora control
@@ -387,8 +393,10 @@ static void receive_message()
         ev_lora_closed = ev_queue.cancel(ev_lora_id);
         if (ev_lora_closed)
             printf("lora stopped\r\n");
-        else
-            printf("lora couldn't be stopped!\r\n");;
+        else {
+            printf("lora couldn't be stopped!\r\n");
+            ev_log_closed = 1;
+        }
     }
 
     // UART control
@@ -406,8 +414,10 @@ static void receive_message()
         ev_uart_closed = ev_queue.cancel(ev_uart_id);
         if (ev_uart_closed)
             printf("uart stopped\r\n");
-        else
-            printf("uart couldn't be stopped!\r\n");;
+        else {
+            printf("uart couldn't be stopped!\r\n");
+            ev_uart_closed = 1;
+        }
     }
     
         
