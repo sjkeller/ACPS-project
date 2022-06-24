@@ -3,8 +3,6 @@
 #include <cstring>
 #include <stdio.h>
 
-
-
 #include "lorawan/LoRaWANInterface.h"
 #include "lorawan/system/lorawan_data_structures.h"
 #include "events/EventQueue.h"
@@ -73,10 +71,7 @@ DigitalOut led(LED1);
  * Dummy sensor class object
  */
 
-
-
 I2C* bus = new I2C(sdaPin, sclPin);
-
 
 BMP280* sensor = new BMP280(bus, bme280Add);
 DS1820  ds1820(PC_9);
@@ -108,11 +103,10 @@ static LoRaWANInterface lorawan(radio);
  */
 static lorawan_app_callbacks_t callbacks;
 
- 
 /**
  * Connection confiugration
  */
- static lorawan_connect_t connection;
+static lorawan_connect_t connection;
 
 int ev_log_id;
 int ev_sensor_id;
@@ -272,7 +266,9 @@ static void send_empty_message()
     printf("After memset");
 }
 
-
+/*!
+ * Reads Data from sensor and writes it to the transmission buffer
+ */
 
 void readData() {
     temp = sensor->getTemperature();
@@ -281,11 +277,17 @@ void readData() {
     printf("Read %d bytes of data\r\n", packet_len);
 }
 
+/*!
+ * Prints sensor data to uart
+ */
+
 void printUART() {
     printf("Temperature: %f gradC, Pressure %f hPa\r\n", temp, pres);
 }
 
-
+/*!
+ * Saves sensor data to SD card
+ */
 
 void saveSD() {
 /*
@@ -406,9 +408,7 @@ static void receive_message()
             printf("uart couldn't be stopped!\r\n");
             ev_uart_closed = 1;
         }
-    }
-    
-        
+    }   
 
     memset(rx_buffer, 0, sizeof(rx_buffer));
 }
@@ -424,6 +424,7 @@ static void lora_event_handler(lorawan_event_t event)
     switch (event) {
         case CONNECTED:
             printf("\r\n Connection - Successful \r\n");
+            // start all event queue calls
             ev_sensor_id = ev_queue.call_every(READ_TIMER, readData);
             ev_lora_id = ev_queue.call_every(LORA_TIMER, send_message);
             ev_uart_id = ev_queue.call_every(UART_TIMER, printUART);
