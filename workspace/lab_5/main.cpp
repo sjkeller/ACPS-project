@@ -10,15 +10,12 @@
 
 // Application helpers
 #include "lora_radio_helper.h"
-#include "trace_helper.h"
-
 
 #define CURRENT_FACTOR 8.43
 #define DISABLE_SOLAR_PIN PB_5
 #define DISCHARGE_PIN PB_7
 #define MAX_NUMBER_OF_EVENTS 10
 #define CONFIRMED_MSG_RETRY_COUNTER 3
-
 
 #define ECO_MODE 1
 #define HARVEST_MODE 2
@@ -77,7 +74,6 @@ void sendVoltages() {
 }
 
 int configLora() {
-    setup_trace();
       // stores the status of a call to LoRaWAN protocol
     lorawan_status_t retcode;
 
@@ -108,7 +104,7 @@ int configLora() {
 
     // Enable adaptive data rate
     if (lorawan.enable_adaptive_datarate() != LORAWAN_STATUS_OK) {
-        printf("\r\n enable_adaptive_datarate failed! \r\n");
+        printf("\r\n enable_adative_datarate failed! \r\n");
         return -1;
     }
 
@@ -125,7 +121,6 @@ int configLora() {
 
     printf("\r\n Connection - In Progress ...\r\n");
 
-    //ev_queue.dispatch_forever();
     return 0;
 }
 
