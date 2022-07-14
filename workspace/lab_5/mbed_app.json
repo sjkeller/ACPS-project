@@ -6,6 +6,7 @@
         "*": {
             "target.printf_lib": "std",
             "platform.stdio-convert-newlines": true,
+            "platform.cpu-stats-enabled": true,
             "target.features_add": ["STORAGE"],
             "target.components_add": ["SD"],
             "sd.SPI_MOSI": "D11",
